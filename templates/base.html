@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Calificaciones Tributarias NUAM{% endblock %}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin: 0; background: #eef2f7; color: #222; }
+    header { background: #1F4E79; color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    header a { color: white; margin-left: 12px; }
+    main { padding: 20px 24px; }
+    h2 { color: #1F4E79; margin-top: 0; }
+    .panel { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.12); margin-bottom: 16px; }
+    .filtros { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    label { font-size: 13px; display: block; }
+    input, select { padding: 7px; margin-top: 3px; border: 1px solid #bbb; border-radius: 4px; font-size: 14px; }
+    .btn { display: inline-block; padding: 8px 16px; background: #1F4E79; color: white; border: 0; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 14px; }
+    .btn.sec { background: #6c7a89; }
+    .btn.peligro { background: #b00020; }
+    .btn[disabled] { opacity: .5; cursor: not-allowed; }
+    .tabla-scroll { overflow-x: auto; }
+    table { border-collapse: collapse; font-size: 13px; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; white-space: nowrap; }
+    th { background: #dce6f1; position: sticky; top: 0; }
+    tr:hover td { background: #f5f9ff; }
+    .acciones { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .msg { padding: 10px 14px; border-radius: 4px; margin-bottom: 10px; background: #fdecea; color: #b00020; }
+    .msg.ok { background: #e6f4ea; color: #1e6b34; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .grid label input, .grid label select { width: 100%; }
+    .campo-largo { grid-column: span 2; }
+    .item { border: 1px solid #e1e6ed; border-radius: 6px; padding: 8px; background: #fafcff; }
+    .item small { display: block; color: #555; min-height: 32px; font-size: 11px; }
+    .item input { width: 100%; }
+    @media (max-width: 600px) { .campo-largo { grid-column: span 1; } main { padding: 12px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Mantenedor de Calificaciones Tributarias · NUAM</strong>
+    <span>
+      {{ session["nombre"] }} ({{ session["rol"] }})
+      <a href="{{ url_for('mantenedor') }}">Mantenedor</a>
+      {% if session["rol"] == "administrador" %}<a href="{{ url_for('ver_log') }}">Log</a>{% endif %}
+      <a href="{{ url_for('logout') }}">Cerrar sesión</a>
+    </span>
+  </header>
+  <main>
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% for categoria, m in mensajes %}<div class="msg {{ 'ok' if categoria == 'ok' else '' }}">{{ m }}</div>{% endfor %}
+    {% endwith %}
+    {% block contenido %}{% endblock %}
+  </main>
+</body>
+</html>

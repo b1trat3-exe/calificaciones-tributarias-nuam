@@ -34,14 +34,22 @@ class Calificacion(db.Model):
     isfut = db.Column(db.Boolean, default=False)
     factor_actualizacion = db.Column(db.Float, default=0)
     origen = db.Column(db.String(20), default="manual")      # manual / archivo / sistema
-    fecha_modificacion = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    fecha_modificacion = db.Column(db.DateTime, default=datetime.now)
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False)
     usuario = db.relationship("Usuario", backref="calificaciones")
 
-    # Factores 8 al 37: factor_8, factor_9, ..., factor_37
+    # Montos y factores 8 al 37: monto_8..monto_37 y factor_8..factor_37
     for _n in range(8, 38):
+        locals()[f"monto_{_n}"] = db.Column(db.Float, default=0)
         locals()[f"factor_{_n}"] = db.Column(db.Float, default=0)
     del _n
 
-    def suma_factores_8_16(self):
-        return sum((getattr(self, f"factor_{n}") or 0) for n in range(8, 17))
+
+class LogAuditoria(db.Model):
+    __tablename__ = "log_auditoria"
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    usuario_id = db.Column(db.Integer, nullable=True)
+    usuario_nombre = db.Column(db.String(100))
+    accion = db.Column(db.String(30), nullable=False)   # INGRESO / MODIFICACION / ELIMINACION / LOGIN
+    detalle = db.Column(db.String(300))

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} - NUAM{% endblock %}
+{% block contenido %}
+<h2>{{ titulo }}</h2>
+
+<form method="post" id="frm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="panel">
+    <h3>1. Datos básicos</h3>
+    <div class="grid">
+      <label>Mercado
+        <select name="mercado" required>
+          {% for m in mercados %}<option value="{{ m }}" {{ 'selected' if valores.get('mercado') == m }}>{{ m }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Instrumento <input name="instrumento" maxlength="60" required value="{{ valores.get('instrumento', '') }}"></label>
+      <label>Ejercicio (año comercial) <input type="number" name="ejercicio" required value="{{ valores.get('ejercicio', '') }}"></label>
+      <label>Secuencia evento (&gt; 10.000) <input type="number" name="secuencia_evento" required value="{{ valores.get('secuencia_evento', '') }}"></label>
+      <label>Fecha de pago <input type="date" name="fecha_pago" required value="{{ valores.get('fecha_pago', '') }}"></label>
+      <label>Dividendo <input name="dividendo" value="{{ valores.get('dividendo', 0) }}"></label>
+      <label>Valor histórico <input name="valor_historico" value="{{ valores.get('valor_historico', 0) }}"></label>
+      <label>Factor de actualización <input name="factor_actualizacion" value="{{ valores.get('factor_actualizacion', 0) }}"></label>
+      <label class="campo-largo">Descripción <input name="descripcion" maxlength="200" value="{{ valores.get('descripcion', '') }}"></label>
+      <label><br><input type="checkbox" name="isfut" {{ 'checked' if valores.get('isfut') }}> Acogido a ISFUT / ISIFUT</label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>2. Forma de ingreso</h3>
+    <label style="display:inline-block;margin-right:24px">
+      <input type="radio" name="modo" value="montos" {{ 'checked' if valores.get('modo', 'montos') == 'montos' }} onchange="cambiarModo()"> Por montos (el sistema calcula los factores)
+    </label>
+    <label style="display:inline-block">
+      <input type="radio" name="modo" value="factores" {{ 'checked' if valores.get('modo') == 'factores' }} onchange="cambiarModo()"> Por factores (ingreso directo)
+    </label>
+  </div>
+
+  <div class="panel" id="panel-montos">
+    <h3>3. Montos (según certificado del SII)</h3>
+    <div class="grid">
+      {% for n in numeros %}
+      <div class="item"><small>{{ n }} · {{ etiquetas[n] }}</small>
+        <input name="monto_{{ n }}" value="{{ valores.get('monto_' ~ n, 0) }}" inputmode="decimal"></div>
+      {% endfor %}
+    </div>
+    <div class="acciones"><button class="btn" type="button" onclick="calcular()">Calcular</button></div>
+  </div>
+
+  <div class="panel">
+    <h3>4. Factores <small id="suma"></small></h3>
+    <div class="grid">
+      {% for n in numeros %}
+      <div class="item"><small>{{ n }} · {{ etiquetas[n] }}</small>
+        <input name="factor_{{ n }}" value="{{ valores.get('factor_' ~ n, 0) }}" inputmode="decimal" oninput="sumar()"></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="acciones">
+    <button class="btn" type="submit">Grabar</button>
+    <a class="btn sec" href="{{ url_for('mantenedor') }}">Cancelar</a>
+  </div>
+</form>
+
+<script>
+  const NUMS = {{ numeros|tojson }};
+  const campo = (p, n) => document.querySelector('[name=' + p + '_' + n + ']');
+
+  function cambiarModo() {
+    const montos = document.querySelector('[name=modo]:checked').value === 'montos';
+    document.getElementById('panel-montos').style.display = montos ? 'block' : 'none';
+    NUMS.forEach(n => campo('factor', n).readOnly = montos);
+  }
+  function sumar() {
+    let s = 0;
+    for (let n = 8; n <= 16; n++) s += parseFloat((campo('factor', n).value || '0').replace(',', '.')) || 0;
+    const el = document.getElementById('suma');
+    el.textContent = ' (suma factores 8 al 16: ' + s.toFixed(8) + ')';
+    el.style.color = s > 1.0000001 ? '#b00020' : '#1e6b34';
+  }
+  async function calcular() {
+    const datos = {};
+    NUMS.forEach(n => datos[n] = campo('monto', n).value);
+    const r = await fetch('/api/calcular', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]').value},
+      body: JSON.stringify(datos)
+    });
+    const j = await r.json();
+    if (!r.ok) { alert(j.error); return; }
+    NUMS.forEach(n => campo('factor', n).value = j.factores[n]);
+    sumar();
+    if (j.errores.length) alert(j.errores.join('\n'));
+  }
+  cambiarModo(); sumar();
+</script>
+{% endblock %}

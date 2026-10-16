@@ -1,23 +1,92 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mantenedor - Calificaciones Tributarias NUAM</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #eef2f7; }
-    header { background: #1F4E79; color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
-    header a { color: white; }
-    main { padding: 24px; }
-  </style>
-</head>
-<body>
-  <header>
-    <strong>Mantenedor de Calificaciones Tributarias</strong>
-    <span>{{ session["nombre"] }} ({{ session["rol"] }}) | <a href="{{ url_for('logout') }}">Cerrar sesión</a></span>
-  </header>
-  <main>
-    <p>Sesión iniciada correctamente. Aquí irá la grilla de calificaciones.</p>
-  </main>
-</body>
-</html>
+{% extends "base.html" %}
+{% block titulo %}Mantenedor - Calificaciones Tributarias NUAM{% endblock %}
+{% block contenido %}
+<h2>Mantenedor de calificaciones</h2>
+
+<div class="panel">
+  <form method="get" class="filtros">
+    <label>Mercado
+      <select name="mercado">
+        <option value="">Todos</option>
+        {% for m in mercados %}<option value="{{ m }}" {{ 'selected' if filtro.mercado == m }}>{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Origen de la información
+      <select name="origen">
+        <option value="">Todos</option>
+        {% for o in origenes %}<option value="{{ o }}" {{ 'selected' if filtro.origen == o }}>{{ o|capitalize }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Período comercial (año)
+      <input type="number" name="ejercicio" value="{{ filtro.ejercicio }}" placeholder="Ej: 2025" min="1990" max="2100">
+    </label>
+    <button class="btn" type="submit">Buscar</button>
+    <a class="btn sec" href="{{ url_for('mantenedor') }}">Limpiar</a>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="tabla-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th></th><th>Ejercicio</th><th>Instrumento</th><th>Mercado</th><th>Fecha pago</th>
+          <th>Descripción</th><th>Sec. evento</th><th>ISFUT</th><th>Origen</th><th>Factor act.</th>
+          {% for n in numeros %}<th title="{{ etiquetas[n] }}">F{{ n }}</th>{% endfor %}
+          <th>Última modificación</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in filas %}
+        <tr>
+          <td><input type="radio" name="sel" value="{{ c.id }}"></td>
+          <td>{{ c.ejercicio }}</td>
+          <td>{{ c.instrumento }}</td>
+          <td>{{ c.mercado }}</td>
+          <td>{{ c.fecha_pago.strftime('%d-%m-%Y') }}</td>
+          <td>{{ c.descripcion or '' }}</td>
+          <td>{{ c.secuencia_evento }}</td>
+          <td>{{ 'Sí' if c.isfut else 'No' }}</td>
+          <td>{{ c.origen|capitalize }}</td>
+          <td>{{ c.factor_actualizacion }}</td>
+          {% for n in numeros %}{% set v = c|attr('factor_' ~ n) %}<td>{{ ('%.8f'|format(v)) if v else '0' }}</td>{% endfor %}
+          <td>{{ c.fecha_modificacion.strftime('%d-%m-%Y %H:%M') }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ 11 + numeros|length }}">No hay calificaciones para los filtros seleccionados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="acciones">
+    <button class="btn peligro" type="button" onclick="eliminar()">Eliminar</button>
+    <button class="btn sec" type="button" disabled title="Próximamente">Carga masiva</button>
+    <a class="btn" href="{{ url_for('nueva_calificacion', mercado=filtro.mercado) }}">Ingresar</a>
+    <button class="btn" type="button" onclick="modificar()">Modificar</button>
+  </div>
+  <form id="frm-eliminar" method="post" style="display:none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  </form>
+</div>
+
+<script>
+  function seleccionada() {
+    const r = document.querySelector('input[name=sel]:checked');
+    if (!r) { alert('Seleccione una calificación de la grilla.'); return null; }
+    return r.value;
+  }
+  function modificar() {
+    const id = seleccionada();
+    if (id) window.location.href = '/calificaciones/' + id + '/editar';
+  }
+  function eliminar() {
+    const id = seleccionada();
+    if (id && confirm('¿Eliminar la calificación seleccionada?')) {
+      const f = document.getElementById('frm-eliminar');
+      f.action = '/calificaciones/' + id + '/eliminar';
+      f.submit();
+    }
+  }
+</script>
+{% endblock %}

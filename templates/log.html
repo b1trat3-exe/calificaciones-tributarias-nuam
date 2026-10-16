@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Log de auditoría - NUAM{% endblock %}
+{% block contenido %}
+<h2>Log de auditoría</h2>
+<div class="panel">
+  <div class="tabla-scroll">
+    <table>
+      <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
+      <tbody>
+        {% for r in registros %}
+        <tr><td>{{ r.fecha.strftime('%d-%m-%Y %H:%M:%S') }}</td><td>{{ r.usuario_nombre }}</td><td>{{ r.accion }}</td><td>{{ r.detalle }}</td></tr>
+        {% else %}<tr><td colspan="4">Sin registros.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
