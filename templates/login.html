@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingreso - Calificaciones Tributarias NUAM</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #eef2f7; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .caja { background: white; padding: 32px; border-radius: 8px; width: 320px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+    h1 { font-size: 20px; color: #1F4E79; margin-top: 0; }
+    label { display: block; margin-top: 12px; font-size: 14px; }
+    input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+    button { width: 100%; margin-top: 20px; padding: 10px; background: #1F4E79; color: white; border: 0; border-radius: 4px; cursor: pointer; }
+    .error { color: #b00020; margin-top: 12px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="caja">
+    <h1>Calificaciones Tributarias NUAM</h1>
+    <form method="post">
+      <label>Correo <input type="email" name="correo" required></label>
+      <label>Contraseña <input type="password" name="clave" required></label>
+      <button type="submit">Ingresar</button>
+    </form>
+    {% with mensajes = get_flashed_messages() %}
+      {% for m in mensajes %}<div class="error">{{ m }}</div>{% endfor %}
+    {% endwith %}
+  </div>
+</body>
+</html>

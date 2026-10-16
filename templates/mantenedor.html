@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mantenedor - Calificaciones Tributarias NUAM</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #eef2f7; }
+    header { background: #1F4E79; color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+    header a { color: white; }
+    main { padding: 24px; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Mantenedor de Calificaciones Tributarias</strong>
+    <span>{{ session["nombre"] }} ({{ session["rol"] }}) | <a href="{{ url_for('logout') }}">Cerrar sesión</a></span>
+  </header>
+  <main>
+    <p>Sesión iniciada correctamente. Aquí irá la grilla de calificaciones.</p>
+  </main>
+</body>
+</html>
