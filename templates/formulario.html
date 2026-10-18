@@ -22,7 +22,7 @@
       <label>Valor histórico <input name="valor_historico" value="{{ valores.get('valor_historico', 0) }}"></label>
       <label>Factor de actualización <input name="factor_actualizacion" value="{{ valores.get('factor_actualizacion', 0) }}"></label>
       <label class="campo-largo">Descripción <input name="descripcion" maxlength="200" value="{{ valores.get('descripcion', '') }}"></label>
-      <label><br><input type="checkbox" name="isfut" {{ 'checked' if valores.get('isfut') }}> Acogido a ISFUT / ISIFUT</label>
+      <label class="check"><input type="checkbox" name="isfut" {{ 'checked' if valores.get('isfut') }}> Acogido a ISFUT / ISIFUT</label>
     </div>
   </div>
 

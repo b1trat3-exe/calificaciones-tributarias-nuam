@@ -1,0 +1,7 @@
+Flask==3.1.3
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy>=2.0
+PyMySQL==1.1.1
+cryptography
+gunicorn==23.0.0
+pytest==8.3.4

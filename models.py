@@ -1,5 +1,6 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import UniqueConstraint, Index
 from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
@@ -12,6 +13,8 @@ class Usuario(db.Model):
     correo = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     rol = db.Column(db.String(20), nullable=False, default="corredor")  # corredor / administrador
+    intentos_fallidos = db.Column(db.Integer, nullable=False, default=0)
+    bloqueado_hasta = db.Column(db.DateTime, nullable=True)
 
     def set_password(self, clave):
         self.password_hash = generate_password_hash(clave)
@@ -22,6 +25,11 @@ class Usuario(db.Model):
 
 class Calificacion(db.Model):
     __tablename__ = "calificaciones"
+    __table_args__ = (
+        UniqueConstraint("usuario_id", "mercado", "instrumento", "ejercicio", "secuencia_evento",
+                         name="uq_calificacion"),
+        Index("ix_calif_filtros", "ejercicio", "mercado", "origen"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     mercado = db.Column(db.String(30), nullable=False)       # Acciones, CFI, Fondos mutuos
     instrumento = db.Column(db.String(60), nullable=False)
@@ -49,7 +57,8 @@ class LogAuditoria(db.Model):
     __tablename__ = "log_auditoria"
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.DateTime, default=datetime.now, nullable=False)
-    usuario_id = db.Column(db.Integer, nullable=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=True)
     usuario_nombre = db.Column(db.String(100))
-    accion = db.Column(db.String(30), nullable=False)   # INGRESO / MODIFICACION / ELIMINACION / LOGIN
+    accion = db.Column(db.String(30), nullable=False)   # INGRESO / MODIFICACION / ELIMINACION / LOGIN ...
     detalle = db.Column(db.String(300))
+    ip = db.Column(db.String(45))

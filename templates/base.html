@@ -30,6 +30,8 @@
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
     .grid label input, .grid label select { width: 100%; }
     .campo-largo { grid-column: span 2; }
+    label.check { display: flex; align-items: center; gap: 8px; align-self: end; padding-bottom: 8px; }
+    .grid label.check input, input[type=radio] { width: auto; margin: 0; }
     .item { border: 1px solid #e1e6ed; border-radius: 6px; padding: 8px; background: #fafcff; }
     .item small { display: block; color: #555; min-height: 32px; font-size: 11px; }
     .item input { width: 100%; }

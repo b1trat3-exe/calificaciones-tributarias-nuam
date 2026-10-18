@@ -1,11 +1,13 @@
 import hmac
+import json
 import os
 import secrets
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, flash, abort, jsonify)
+from sqlalchemy.exc import IntegrityError
 from models import db, Usuario, Calificacion, LogAuditoria
 from factores import ETIQUETAS, NUMEROS, calcular_factores, validar_factores
 
@@ -14,7 +16,13 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:/
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cambiar-esto-despues")
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("COOKIE_SECURE") == "1"   # activar al usar HTTPS
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=30)             # sesión expira por inactividad
 db.init_app(app)
+
+LOG_DIR = os.environ.get("LOG_DIR", os.path.join(app.root_path, "datos"))
+MAX_INTENTOS = 5
+MINUTOS_BLOQUEO = 10
 
 MERCADOS = ["Acciones", "CFI", "Fondos mutuos"]
 ORIGENES = ["manual", "archivo", "sistema"]
@@ -29,10 +37,14 @@ def crear_usuario(nombre, correo, clave, rol):
         db.session.commit()
 
 
-with app.app_context():
+def inicializar_bd():
     db.create_all()
     crear_usuario("Administrador", "admin@nuam.cl", "Admin1234", "administrador")
     crear_usuario("Corredor Uno", "corredor1@nuam.cl", "Corredor1234", "corredor")
+
+
+with app.app_context():
+    inicializar_bd()
 
 
 # ---------- Seguridad: CSRF, login, roles ----------
@@ -51,6 +63,17 @@ def proteger_csrf():
         token = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or ""
         if not hmac.compare_digest(token, session.get("csrf", "")):
             abort(400)
+
+
+@app.after_request
+def cabeceras_seguridad(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "same-origin"
+    resp.headers["Content-Security-Policy"] = (
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
+    return resp
 
 
 def login_requerido(f):
@@ -72,10 +95,22 @@ def solo_admin(f):
 
 
 def registrar_log(accion, detalle):
+    """Registra el evento en la tabla relacional y en la bitácora de documentos JSON (JSON Lines)."""
+    detalle = (detalle or "")[:300]
+    ip = request.remote_addr
     db.session.add(LogAuditoria(usuario_id=session.get("usuario_id"),
                                 usuario_nombre=session.get("nombre"),
-                                accion=accion, detalle=detalle[:300]))
+                                accion=accion, detalle=detalle, ip=ip))
     db.session.commit()
+    evento = {"fecha": datetime.now().isoformat(timespec="seconds"),
+              "usuario_id": session.get("usuario_id"), "usuario": session.get("nombre"),
+              "accion": accion, "detalle": detalle, "ip": ip}
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(os.path.join(LOG_DIR, "auditoria.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(evento, ensure_ascii=False) + "\n")
+    except OSError:
+        pass   # un fallo del archivo no debe botar la operación del usuario
 
 
 def obtener_calificacion(id):
@@ -99,14 +134,34 @@ def login():
         correo = request.form.get("correo", "").strip().lower()
         clave = request.form.get("clave", "")
         usuario = Usuario.query.filter_by(correo=correo).first()
-        if usuario and usuario.check_password(clave):
+        ahora = datetime.now()
+
+        if usuario and usuario.bloqueado_hasta and usuario.bloqueado_hasta > ahora:
+            registrar_log("LOGIN_BLOQUEADO", f"Intento sobre cuenta bloqueada: {correo[:100]}")
+            flash("Demasiados intentos fallidos. Intente nuevamente en unos minutos.")
+        elif usuario and usuario.check_password(clave):
+            usuario.intentos_fallidos = 0
+            usuario.bloqueado_hasta = None
+            db.session.commit()
             session.clear()
+            session.permanent = True
             session["usuario_id"] = usuario.id
             session["nombre"] = usuario.nombre
             session["rol"] = usuario.rol
             registrar_log("LOGIN", f"Inicio de sesión de {usuario.correo}")
             return redirect(url_for("mantenedor"))
-        flash("Correo o contraseña incorrectos")
+        else:
+            if usuario:
+                usuario.intentos_fallidos = (usuario.intentos_fallidos or 0) + 1
+                if usuario.intentos_fallidos >= MAX_INTENTOS:
+                    usuario.bloqueado_hasta = ahora + timedelta(minutes=MINUTOS_BLOQUEO)
+                    usuario.intentos_fallidos = 0
+                    db.session.commit()
+                    registrar_log("BLOQUEO_CUENTA", f"Cuenta bloqueada por intentos fallidos: {correo[:100]}")
+                else:
+                    db.session.commit()
+            registrar_log("LOGIN_FALLIDO", f"Credenciales incorrectas para: {correo[:100]}")
+            flash("Correo o contraseña incorrectos")
     return render_template("login.html")
 
 
@@ -218,6 +273,18 @@ def procesar_formulario(form, c=None):
     return datos, errores
 
 
+def existe_duplicado(usuario_id, datos, excluir_id=None):
+    q = Calificacion.query.filter_by(usuario_id=usuario_id, mercado=datos["mercado"],
+                                     instrumento=datos["instrumento"], ejercicio=datos["ejercicio"],
+                                     secuencia_evento=datos["secuencia_evento"])
+    if excluir_id:
+        q = q.filter(Calificacion.id != excluir_id)
+    return q.first() is not None
+
+
+MSG_DUPLICADO = "Ya existe una calificación con el mismo mercado, instrumento, ejercicio y secuencia de evento."
+
+
 def aplicar_datos(c, datos):
     for campo in ("mercado", "instrumento", "descripcion", "ejercicio", "secuencia_evento",
                   "fecha_pago", "dividendo", "valor_historico", "factor_actualizacion", "isfut"):
@@ -245,11 +312,20 @@ def valores_desde_calificacion(c):
 def nueva_calificacion():
     if request.method == "POST":
         datos, errores = procesar_formulario(request.form)
+        if not errores and existe_duplicado(session["usuario_id"], datos):
+            errores.append(MSG_DUPLICADO)
         if not errores:
             c = Calificacion(usuario_id=session["usuario_id"], origen="manual")
             aplicar_datos(c, datos)
             db.session.add(c)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                flash(MSG_DUPLICADO)
+                return render_template("formulario.html", titulo="Ingresar calificación",
+                                       valores=request.form.to_dict(), numeros=NUMEROS,
+                                       etiquetas=ETIQUETAS, mercados=MERCADOS)
             registrar_log("INGRESO", f"Calificación {c.id} ({c.instrumento}, {c.ejercicio}) ingresada")
             flash("Calificación ingresada correctamente.", "ok")
             return redirect(url_for("mantenedor"))
@@ -271,6 +347,8 @@ def editar_calificacion(id):
     c = obtener_calificacion(id)
     if request.method == "POST":
         datos, errores = procesar_formulario(request.form, c)
+        if not errores and existe_duplicado(c.usuario_id, datos, excluir_id=c.id):
+            errores.append(MSG_DUPLICADO)
         if not errores:
             aplicar_datos(c, datos)
             db.session.commit()
